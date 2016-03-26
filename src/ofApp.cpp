@@ -1,42 +1,44 @@
 #include "ofApp.h"
+#include "particle.h"
+
+ofSoundPlayer sound;
 
 const int NBANDS = 512;
 float spectrum[NBANDS];
-int bandRadius = 10;
-int bandVelocity = 80;
+int bandRadius =   10;
+int bandVelocity = 10;
 
-float radius = 1200;
-float velocity = 0.5;
-const int numPoints = 500;
-float tx[numPoints], ty[numPoints]; // translation
-float size[numPoints];
-int color[numPoints];
-ofPoint points[numPoints];
+ofFbo fbo;
 
-
+const int numParticles = 500;
+vector<Particle*> particles;
+ofVec3f angle;
 float time0 = 0;
 
 void ofApp::setup() {
-    ofSetBackgroundColor(ofColor(255, 255, 255));
+
+    ofBackgroundGradient(ofColor(255), ofColor(128));
+
+    fbo.allocate(ofGetWidth(), ofGetHeight());
 
     sound.load("Spikenard.mp3");
     sound.play();
 
-    for (int i = 0; i < numPoints; i++) {
-        tx[i] = ofRandom(0, 800);
-        ty[i] = ofRandom(0, 800);
+    angle.set(ofRandom(0.5), 0, ofRandom(2.6));
 
-        size[i] = ofRandom(2, 12);
-
-        color[i] = ofRandom(0, 128);
+    for (int i = 0; i < numParticles; i++) {
+        Particle* p = new Particle();
+        p->radius = ofRandom(ofGetWidth() / 2, ofGetWidth());
+        p->velocity.set(ofRandom(0.5), ofRandom(0.5));
+        p->offset.set(ofRandom(0, 1000), ofRandom(0, 1000));
+        p->size = ofRandom(4, 8);
+        particles.push_back(p);
     }
 }
 
 void ofApp::update() {
     // ofSoundUpdate();
-
     float *val = ofSoundGetSpectrum(NBANDS);
-
     for (int i = 0; i < NBANDS; i++) {
         spectrum[i] *= 0.98;
         spectrum[i] = max(spectrum[i], val[i]);
@@ -44,43 +46,56 @@ void ofApp::update() {
 
     float time = ofGetElapsedTimef();
     float dt = time - time0;
-    dt = ofClamp(dt, 0.0, 0.1);
+    dt = ofClamp(dt, 0.0, 0.5);
     time0 = time;
 
-    radius =   ofMap(spectrum[bandRadius], 1, 2, 400, 800, true);
-    velocity = ofMap(spectrum[bandVelocity], 1, 0.4, 0.05, 0.25);
+    // radius =   ofMap(spectrum[bandRadius], 1, 2, 400, 800, true);
+    // velocity = ofMap(spectrum[bandVelocity], 1, 0.4, 0.05, 0.25);
 
-    for (int i = 0; i < numPoints; i++) {
-        tx[i] += velocity * dt;
-        ty[i] += velocity * dt;
+    for (int i = 0; i < particles.size(); i++) {
+        Particle* p = particles.at(i);
+        p->radius = ofMap(spectrum[bandRadius], 1, 2, 400, 800, true);
+        p->velocity.x = ofMap(spectrum[bandVelocity], 1, 0.2, 0.05, 0.5);
+        p->velocity.y = ofMap(spectrum[bandVelocity], 1, 0.4, 0.01, 0.5);
+        p->update(dt);
 
-        points[i].x = ofSignedNoise(tx[i]) * radius;
-        points[i].y = ofSignedNoise(ty[i]) * radius;
+        if (!p->alive()) {
+            particles.erase(particles.begin() + i);
 
-        size[i] += ofSignedNoise(tx[i]*ty[i]) * velocity;
+            Particle* p = new Particle();
+            p->radius = ofRandom(ofGetWidth() / 2, ofGetWidth());
+            p->velocity.set(ofRandom(0.5), ofRandom(0.5));
+            p->offset.set(ofRandom(0, 1000), ofRandom(0, 1000));
+            p->size = ofRandom(4, 8);
+            particles.push_back(p);
+
+        }
     }
 }
 
-float angleX, angleY, angleZ = 0.0;
-
 void ofApp::draw() {
-    // ofEnableAlphaBlending();
-    ofPushMatrix();
 
+    ofEnableAlphaBlending();
+
+    fbo.begin();
+
+    ofBackgroundGradient(ofColor(255), ofColor(128));
+
+    ofPushMatrix();
     ofTranslate(ofGetWidth() / 2, ofGetHeight() / 2);
 
-    for (int i = 0; i < numPoints; i++) {
-
-        ofSetColor(color[i], color[i], color[i]);
-        // ofFill();
-        ofDrawCircle(points[i], size[i]);
+    for (int i = 0; i < particles.size(); i++) {
+        Particle* p = particles.at(i);
+        ofSetColor(0, 0, 0, p->getAlpha());
+        ofDrawCircle(p->position, p->size);
     }
 
-    ofRotateX(angleX);
-    angleX += 0.5;
+    ofRotateX(angle.x);
+    ofRotateZ(angle.z);
+    angle.x += 1.5;
+    angle.z += 0.5;
 
-    ofRotateZ(angleZ);
-    angleZ += 0.02;
-
+    fbo.end();
     ofPopMatrix();
+    fbo.draw(0, 0);
 }

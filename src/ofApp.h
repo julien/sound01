@@ -4,7 +4,6 @@
 
 class ofApp : public ofBaseApp {
 
-    ofSoundPlayer sound;
 
 public:
     void setup();
